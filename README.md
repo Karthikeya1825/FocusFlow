@@ -1,70 +1,119 @@
-# Focus Flow ⏱️
+# Focus Flow
 
-A minimalist, elegant task management and time tracking application designed to help you stay focused and productive.
+**Focus Flow** is a productivity web application that helps you manage projects, tasks, and habits with a focus on daily progress and time tracking. It features project and task management, a Pomodoro timer, habit tracking, and visual dashboards to help you stay on track.
 
-Try it out: [Focus Flow App](https://dat-lequoc.github.io/focus-flow/)
+---
 
-## Features 🌟
+## Features
 
-- **Task Management**
-  - Create, edit, and organize tasks with unlimited subtasks
-  - Mark tasks as complete/incomplete
-  - Add tasks to "Today's Focus" for better planning
-  - Search and filter tasks
-  - Hide/show completed tasks
+- **Project & Task Management:**  
+  Create projects, add tasks and subtasks, set daily goals, and track completion.
 
-- **Time Tracking**
-  - Built-in Pomodoro timer (25-minute focus sessions)
-  - Track time spent on each task
-  - Automatic time logging
-  - Visual progress tracking
+- **Today's Tasks:**  
+  Mark tasks as "in today" to focus on what matters most each day.
 
-- **Project Organization**
-  - Create multiple projects
-  - Track project progress
-  - Generate project reports
-  - Weekly activity charts
+- **Pomodoro Timer:**  
+  Built-in timer for focused work sessions, with automatic time tracking for tasks.
 
-- **User Experience**
-  - Clean, intuitive interface
-  - Dark/light mode toggle
-  - Keyboard shortcuts
-  - Responsive design
-  - Local storage persistence
+- **Habit Tracker:**  
+  Track daily habits, set targets, and view streaks and statistics.
 
-## Getting Started 🚀
+- **Visual Dashboards:**  
+  See your progress, completed tasks, and time spent at a glance.
 
-1. Visit [Focus Flow App](https://dat-lequoc.github.io/focus-flow/)
-2. Create your first project
-3. Add tasks and subtasks
-4. Start tracking your time with the Pomodoro timer
-5. Monitor your progress with the built-in analytics
+- **MongoDB Backend:**  
+  All data is stored in MongoDB for persistence.
 
-## Keyboard Shortcuts ⌨️
+---
 
-- `Ctrl/Cmd + N`: Focus new task input
-- `Ctrl/Cmd + P`: Focus new project input
-- `Ctrl/Cmd + /`: Focus search input
+## Getting Started
 
-## Local Development 💻
+### Prerequisites
 
-1. Clone the repository
-2. Open `index.html` in your browser
-3. Start coding!
+- [Node.js](https://nodejs.org/) (v16+ recommended)
+- [MongoDB](https://www.mongodb.com/try/download/community) (running locally on default port)
 
-## Contributing 🤝
+### Installation
 
-Contributions are welcome! Feel free to:
-- Report bugs
-- Suggest features
-- Submit pull requests
+1. **Clone the repository:**
+   ```sh
+   git clone <your-repo-url>
+   cd focus-flow
+   ```
 
-## Support the Project ☕
+2. **Install dependencies:**
+   ```sh
+   npm install
+   ```
 
-If you find Focus Flow helpful, consider buying me a coffee!
+3. **Start MongoDB:**  
+   Make sure MongoDB is running. If not, start it with:
+   ```sh
+   mongod --dbpath "C:\data\db"
+   ```
+   (or your preferred data directory)
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-orange?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/JWCfI0sTzy)
+4. **Start the server:**
+   ```sh
+   npm start
+   ```
+   or
+   ```sh
+   node server.js
+   ```
 
-## License 📝
+5. **Open the app:**  
+   Go to [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
 
-MIT License - feel free to use this project however you'd like!
+---
+
+## Project Structure
+
+```
+focus-flow/
+├── index.html         # Main frontend (projects, tasks, dashboard)
+├── habits.html        # Habits tracker frontend
+├── server.js          # Express backend server
+├── app.js             # (Legacy/unused server file)
+├── package.json       # Project dependencies and scripts
+├── README.md          # This file
+└── ...                # Other config and static files
+```
+
+---
+
+## API Endpoints
+
+- `GET /api/projects` — List all projects
+- `POST /api/projects` — Create a new project
+- `PUT /api/projects/:id` — Update a project (including tasks)
+- `DELETE /api/projects/:id` — Delete a project
+
+- `GET /api/habits` — List all habits
+- `POST /api/habits` — Create a new habit
+- `PUT /api/habits/:id` — Update a habit
+- `DELETE /api/habits/:id` — Delete a habit
+
+---
+
+## Usage Tips
+
+- **Add tasks to “Today’s Tasks”** by clicking the ☀️ icon next to a task.
+- **Set daily goals** for tasks to track your progress.
+- **Use the Pomodoro timer** to log focused work sessions.
+- **Track habits** on the Habits page for daily consistency.
+
+---
+
+## Troubleshooting
+
+- If you see "This site can’t be reached", ensure:
+  - MongoDB is running
+  - The server is started from the `focus-flow` directory
+  - You are visiting [http://127.0.0.1:5000](http://127.0.0.1:5000)
+
+---
+
+## License
+
+MIT License

@@ -199,7 +199,7 @@
   </div>
   <script>
     // Initialize variables and DOM elements
-    let habits = JSON.parse(localStorage.getItem('habits')) || [];
+    window.habits = []; // Global habits array
     let isEditing = false;
     let editingHabitId = null;
     let chartInstance = null;
@@ -266,7 +266,7 @@
       while (true) {
         const monthKey = `${dateIterator.getFullYear()}-${String(dateIterator.getMonth() + 1).padStart(2, '0')}`;
         const day = dateIterator.getDate();
-        const status = habit.history[monthKey]?.status?.[day];
+        const status = habit.history?.[monthKey]?.status?.[day];
         let isCompleted = false;
 
         if (habit.type === 'default' || !habit.type) {
@@ -342,7 +342,7 @@
             dayTd.classList.add('today-column', 'light-bg');
           }
           const monthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-          const status = habit.history[monthKey]?.status?.[day];
+          const status = habit.history?.[monthKey]?.status?.[day];
 
           if (habit.type === 'default' || !habit.type) {
             let statusHtml = '';
@@ -395,7 +395,7 @@
       });
     }
 
-    function handleDayCellClick(habit, day, td) {
+    async function handleDayCellClick(habit, day, td) {
       const monthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
       if (!habit.history[monthKey]) {
         habit.history[monthKey] = { status: {} };
@@ -404,45 +404,63 @@
         habit.history[monthKey].status = {};
       }
 
-      if (habit.type === 'default' || !habit.type) {
-        const currentStatus = habit.history[monthKey].status[day] || 'none';
-        let newStatus;
-        switch (currentStatus) {
-          case 'none':
-            newStatus = 'completed';
-            td.innerHTML = '<span class="text-green-500">&#10003;</span>';
-            break;
-          case 'completed':
-            newStatus = 'failed';
-            td.innerHTML = '<span class="status-failed">&#10007;</span>';
-            break;
-          case 'failed':
-            newStatus = 'none';
-            td.innerHTML = '';
-            break;
-        }
-        habit.history[monthKey].status[day] = newStatus;
-        saveHabits();
-        updateView();
-      } else if (habit.type === 'number') {
-        const currentValue = habit.history[monthKey].status[day] || '';
-        const inputValue = prompt('Enter value:', currentValue);
-        if (inputValue !== null) {
-          const value = parseFloat(inputValue);
-          if (!isNaN(value)) {
-            habit.history[monthKey].status[day] = value;
-            saveHabits();
-            updateView();
+      try {
+        if (habit.type === 'default' || !habit.type) {
+          const currentStatus = habit.history[monthKey].status[day] || 'none';
+          let newStatus;
+          switch (currentStatus) {
+            case 'none':
+              newStatus = 'completed';
+              td.innerHTML = '<span class="text-green-500">&#10003;</span>';
+              break;
+            case 'completed':
+              newStatus = 'failed';
+              td.innerHTML = '<span class="status-failed">&#10007;</span>';
+              break;
+            case 'failed':
+              newStatus = 'none';
+              td.innerHTML = '';
+              break;
+          }
+          habit.history[monthKey].status[day] = newStatus;
+        } else if (habit.type === 'number') {
+          const currentValue = habit.history[monthKey].status[day] || '';
+          const inputValue = prompt('Enter value:', currentValue);
+          if (inputValue !== null) {
+            const value = parseFloat(inputValue);
+            if (!isNaN(value)) {
+              habit.history[monthKey].status[day] = value;
+            }
+          }
+        } else if (habit.type === 'time') {
+          const currentValue = habit.history[monthKey].status[day] || '';
+          const inputValue = prompt('Enter time (HH:MM):', currentValue);
+          if (inputValue !== null) {
+            habit.history[monthKey].status[day] = inputValue;
           }
         }
-      } else if (habit.type === 'time') {
-        const currentValue = habit.history[monthKey].status[day] || '';
-        const inputValue = prompt('Enter time (HH:MM):', currentValue);
-        if (inputValue !== null) {
-          habit.history[monthKey].status[day] = inputValue;
-          saveHabits();
-          updateView();
+
+        // Save the updated habit to MongoDB
+        const response = await fetch('http://localhost:5000/api/habits/' + habit._id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(habit)
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update habit');
         }
+
+        const updatedHabit = await response.json();
+        // Update the local habit with the saved data
+        const index = habits.findIndex(h => h._id === habit._id);
+        if (index !== -1) {
+          habits[index] = updatedHabit;
+        }
+        updateView();
+      } catch (error) {
+        console.error('Error updating habit:', error);
+        alert('Failed to update habit. Please try again.');
       }
     }
 
@@ -526,8 +544,9 @@
     // Update additional settings when habit type changes
     document.getElementById('habitType').addEventListener('change', updateAdditionalSettings);
 
-    habitForm.addEventListener('submit', e => {
+    habitForm.addEventListener('submit', async e => {
       e.preventDefault();
+      
       const name = document.getElementById('habitName').value.trim();
       const note = document.getElementById('habitNote').value.trim() || null;
       const habitType = document.getElementById('habitType').value;
@@ -545,21 +564,71 @@
         earlierIsBetter = earlierIsBetterInput ? earlierIsBetterInput.value === 'true' : null;
       }
 
-      if (isEditing) {
-        const habit = habits.find(h => h.id === editingHabitId);
-        if (habit) { 
-          habit.name = name; 
-          habit.type = habitType;
-          habit.target = target;
-          habit.earlierIsBetter = earlierIsBetter;
-          habit.note = note;
+      const monthKey = currentYear + '-' + String(currentMonth + 1).padStart(2, '0');
+      const habitData = {
+        name,
+        type: habitType,
+        target,
+        earlierIsBetter,
+        note,
+        history: {
+          [monthKey]: {
+            status: {}
+          }
+        },
+        _id: isEditing ? editingHabitId : undefined // Include _id for existing habits
+      };
+
+      try {
+        if (isEditing) {
+          const habit = habits.find(h => h._id === editingHabitId);
+          if (habit) {
+            // Update existing habit
+            const response = await fetch('http://127.0.0.1:5000/api/habits/' + habit._id, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...habitData,
+                history: {
+                  ...habit.history,
+                  [monthKey]: habit.history[monthKey] || { status: {} }
+                }
+              })
+            });
+
+            if (!response.ok) {
+              throw new Error('Failed to update habit');
+            }
+
+            const updatedHabit = await response.json();
+            const index = habits.findIndex(h => h.id === editingHabitId);
+            if (index !== -1) {
+              habits[index] = updatedHabit;
+            }
+          }
+        } else {
+          // Create new habit
+          const response = await fetch('http://127.0.0.1:5000/api/habits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(habitData)
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to save habit');
+          }
+
+          const savedHabit = await response.json();
+          habits.push(savedHabit);
         }
-      } else {
-        habits.push({ id: Date.now().toString(), name, type: habitType, target, earlierIsBetter, note, history: {} });
+        
+        updateView();
+        habitModal.classList.add('hidden');
+        habitForm.reset();
+      } catch (error) {
+        console.error('Error saving habit:', error);
+        alert('Failed to save habit. Please try again.');
       }
-      saveHabits();
-      updateView();
-      habitModal.classList.add('hidden');
     });
 
     deleteBtn.addEventListener('click', () => {
@@ -654,8 +723,57 @@
       }
     });
 
-    function saveHabits() {
-      localStorage.setItem('habits', JSON.stringify(habits));
+    async function saveHabits() {
+      // Save all habits to backend (bulk update)
+      try {
+        const promises = habits.map(habit => {
+          if (habit._id) {
+            // Update existing habit
+            return fetch('http://127.0.0.1:5000/api/habits/' + habit._id, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...habit,
+                history: habit.history || {},
+                type: habit.type || 'default',
+                target: habit.target || null,
+                earlierIsBetter: habit.earlierIsBetter || false,
+                note: habit.note || ''
+              })
+            }).then(res => res.json());
+          } else {
+            // Create new habit
+            return fetch('http://127.0.0.1:5000/api/habits', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...habit,
+                history: {
+                  [currentYear + '-' + String(currentMonth + 1).padStart(2, '0')]: {
+                    status: {}
+                  }
+                },
+                type: habit.type || 'default',
+                target: habit.target || null,
+                earlierIsBetter: habit.earlierIsBetter || false,
+                note: habit.note || ''
+              })
+            }).then(async res => {
+              if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Failed to save habit: ${text}`);
+              }
+              return res.json();
+            });
+          }
+        });
+
+        const savedHabits = await Promise.all(promises);
+        // Update local habits with saved data from MongoDB
+        habits = savedHabits;
+      } catch (error) {
+        console.error('Error saving habits:', error);
+      }
     }
 
     function updateView() {
@@ -686,7 +804,7 @@
         let completedCount = 0;
         habits.forEach(habit => {
           const monthKey = `${date.getFullYear()}-${String(month).padStart(2, '0')}`;
-          const status = habit.history[monthKey]?.status?.[day];
+          const status = habit.history?.[monthKey]?.status?.[day];
           let isCompleted = false;
 
           if (habit.type === 'default' || !habit.type) {
@@ -830,7 +948,7 @@
       const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
       let count = 0;
       habits.forEach(habit => {
-        const status = habit.history[monthKey]?.status?.[today.getDate()];
+        const status = habit.history?.[monthKey]?.status?.[today.getDate()];
         if (habit.type === 'default' || !habit.type) {
           if (status === 'completed') count++;
         } else if (habit.type === 'number') {
@@ -850,9 +968,30 @@
       return count;
     }
 
+    // Initialize habits array
+    let habits = [];
+
     window.addEventListener('DOMContentLoaded', () => {
+      fetch('http://127.0.0.1:5000/api/habits')
+        .then(res => res.json())
+        .then(data => {
+          // Filter out habits with null names and ensure proper structure
+          habits = (data || []).filter(habit => habit.name && habit.name.trim() !== '').map(habit => ({
+            ...habit,
+            history: habit.history || {},
+            type: habit.type || 'default',
+            target: habit.target || null,
+            earlierIsBetter: habit.earlierIsBetter || false,
+            note: habit.note || ''
+          }));
+          updateView();
+        })
+        .catch(err => {
+          console.error('Failed to load habits from backend:', err);
+          habits = [];
+          updateView();
+        });
       if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
-      updateView();
     });
 
     // Drag and Drop Functionality

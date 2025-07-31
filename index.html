@@ -418,123 +418,61 @@
         }
 
         function loadInitialData() {
-            const savedData = localStorage.getItem('taskManagerData');
-            if (savedData) {
-                projects = JSON.parse(savedData);
-            } else {
-                projects = [
-                    {
-                        id: generateId(),
-                        name: "Learning AI",
-                        tasks: [
-                            {
-                                id: generateId(),
-                                title: "Hugging Face Course",
-                                timeSpent: 0,
-                                isTimerRunning: false,
-                                isExpanded: true,
-                                isCompleted: false,
-                                inToday: true,
-                                dailyGoal: 2,
-                                subtasks: [
-                                    {
-                                        id: generateId(),
-                                        title: "NLP with Transformers",
-                                        timeSpent: 2300,
-                                        isTimerRunning: false,
-                                        isExpanded: false,
-                                        isCompleted: true,
-                                        subtasks: []
-                                    },
-                                    {
-                                        id: generateId(),
-                                        title: "Audio Processing Course https://huggingface.co/learn/audio-course",
-                                        timeSpent: 1500,
-                                        isTimerRunning: false,
-                                        isExpanded: false,
-                                        isCompleted: false,
-                                        inToday: true,
-                                        dailyGoal: 3,
-                                        subtasks: []
-                                    }
-                                ]
-                            },
-                            {
-                                id: generateId(),
-                                title: "Practice Projects",
-                                timeSpent: 0,
-                                isTimerRunning: false,
-                                isExpanded: true,
-                                isCompleted: false,
-                                subtasks: [
-                                    {
-                                        id: generateId(),
-                                        title: "Build a Chatbot using Transformers",
-                                        timeSpent: 0,
-                                        isTimerRunning: false,
-                                        isExpanded: false,
-                                        isCompleted: false,
-                                        subtasks: []
-                                    },
-                                    {
-                                        id: generateId(),
-                                        title: "Image Generation with Stable Diffusion",
-                                        timeSpent: 0,
-                                        isTimerRunning: false,
-                                        isExpanded: false,
-                                        isCompleted: true,
-                                        subtasks: []
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        id: generateId(),
-                        name: "Reading Book",
-                        tasks: [
-                            {
-                                id: generateId(),
-                                title: "Read Chapter 1",
-                                timeSpent: 0,
-                                isTimerRunning: false,
-                                isExpanded: false,
-                                isCompleted: false,
-                                inToday: false,
-                                dailyGoal: 0,
-                                subtasks: []
-                            },
-                            {
-                                id: generateId(),
-                                title: "Take Notes",
-                                timeSpent: 0,
-                                isTimerRunning: false,
-                                isExpanded: false,
-                                isCompleted: false,
-                                inToday: false,
-                                dailyGoal: 0,
-                                subtasks: []
-                            }
-                        ]
-                    }
-                ];
-            }
-            projects.forEach(project => {
-                project.tasks.forEach(task => {
-                    initializeTaskProperties(task);
-                });
-            });
-
-            // Add single global event listener for dropdowns
-            if (!window.dropdownClickListenerAdded) {
-                document.addEventListener('click', () => {
-                    // Always use global projectDropdowns array
-                    projectDropdowns.forEach(dropdown => {
-                        dropdown.classList.add('hidden');
+            console.log('Starting to load data...');
+            fetch('http://127.0.0.1:5000/api/projects', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => {
+                console.log('Received response:', res.status);
+                if (!res.ok) {
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                return res.json();
+            })
+            .then(data => {
+                console.log('Loaded projects:', data); // Debug log
+                if (!data) {
+                    console.error('No data received from server');
+                    return;
+                }
+                // Handle both array and single object responses
+                if (!Array.isArray(data) && typeof data === 'object') {
+                    data = [data];
+                }
+                projects = data.filter(project => project && project._id);
+                console.log('Processed projects:', projects);
+                
+                if (projects.length === 0) {
+                    console.log('No projects found in data');
+                }
+                
+                projects.forEach(project => {
+                    // Ensure project has required properties
+                    project.name = project.name || 'Untitled Project';
+                    project.tasks = Array.isArray(project.tasks) ? project.tasks : [];
+                    project.tasks.forEach(task => {
+                        initializeTaskProperties(task);
                     });
                 });
-                window.dropdownClickListenerAdded = true;
-            }
+                    // Add single global event listener for dropdowns
+                    if (!window.dropdownClickListenerAdded) {
+                        document.addEventListener('click', () => {
+                            projectDropdowns.forEach(dropdown => {
+                                dropdown.classList.add('hidden');
+                            });
+                        });
+                        window.dropdownClickListenerAdded = true;
+                    }
+                    renderProjectList();
+                    showDashboard();
+                })
+                .catch(err => {
+                    console.error('Failed to load projects from backend:', err);
+                });
         }
 
         function initializeTaskProperties(task) {
@@ -559,8 +497,79 @@
             task.subtasks.forEach(subtask => initializeTaskProperties(subtask));
         }
 
-        function saveData() {
-            localStorage.setItem('taskManagerData', JSON.stringify(projects));
+        async function saveData() {
+            try {
+                console.log('Saving projects:', projects);
+                // Save all projects to backend (bulk update)
+                const promises = projects.map(project => {
+                    if (project._id) {
+                        console.log('Saving project:', project._id);
+                        // Convert ObjectId strings to proper format if needed
+                        const projectToSave = {
+                            ...project,
+                            tasks: project.tasks.map(task => ({
+                                ...task,
+                                _id: task._id || null,
+                                subtasks: (task.subtasks || []).map(subtask => ({
+                                    ...subtask,
+                                    _id: subtask._id || null
+                                }))
+                            }))
+                        };
+                        
+                        return fetch('http://127.0.0.1:5000/api/projects/' + project._id, {
+                            method: 'PUT',
+                            headers: { 
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(projectToSave)
+                        }).then(res => {
+                            if (!res.ok) {
+                                throw new Error(`HTTP error! status: ${res.status}`);
+                            }
+                            return res.json();
+                        }).then(updatedProject => {
+                            console.log('Project saved successfully:', updatedProject);
+                            // Update the project in the projects array with the saved version
+                            const index = projects.findIndex(p => p._id === project._id);
+                            if (index !== -1) {
+                                projects[index] = updatedProject;
+                            }
+                            return updatedProject;
+                        }).catch(err => {
+                            console.error('Failed to save project:', project._id, err);
+                            throw err;
+                        });
+                    } else {
+                        // If project has no _id, it's new - create it
+                        return fetch('http://127.0.0.1:5000/api/projects', {
+                            method: 'POST',
+                            headers: { 
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(project)
+                        }).then(res => {
+                            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                            return res.json();
+                        }).then(newProject => {
+                            console.log('New project created:', newProject);
+                            // Replace the temporary project with the saved one
+                            const index = projects.findIndex(p => p === project);
+                            if (index !== -1) {
+                                projects[index] = newProject;
+                            }
+                            return newProject;
+                        });
+                    }
+                });
+                
+                await Promise.all(promises.filter(p => p));
+            } catch (error) {
+                console.error('Failed to save data:', error);
+                alert('Failed to save changes. Please try again.');
+            }
         }
 
         function generateId() {
@@ -1178,15 +1187,28 @@
                     const projectNameInput = document.getElementById('new-project-name');
                     const name = projectNameInput.value.trim();
                     if (name) {
-                        const newProject = {
-                            id: generateId(),
-                            name: name,
-                            tasks: []
-                        };
-                        projects.push(newProject);
-                        saveData();
-                        renderProjectList();
-                        projectNameInput.value = '';
+                        // Create new project in backend
+                        fetch('http://127.0.0.1:5000/api/projects', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name, tasks: [] })
+                        })
+                        .then(res => {
+                            if (!res.ok) {
+                                throw new Error(`HTTP error! status: ${res.status}`);
+                            }
+                            return res.json();
+                        })
+                        .then(newProject => {
+                            projects.push(newProject);
+                            saveData(); // Save to ensure persistence
+                            renderProjectList();
+                            projectNameInput.value = '';
+                        })
+                        .catch(err => {
+                            console.error('Failed to create project:', err);
+                            alert('Failed to create project. Please try again.');
+                        });
                     }
                 }
             });
@@ -1288,10 +1310,19 @@
                             todayTimeSpent += entry.duration;
                         }
                     });
-                    task.dailyProgress = Math.floor(todayTimeSpent / 60 / pomodoroDuration); // Changed from 25 to pomodoroDuration
+                    task.dailyProgress = Math.floor(todayTimeSpent / 60 / pomodoroDuration);
                 }
 
-                saveData();
+                // Find parent project and update in backend
+            // Find parent project and update in backend (use _id for MongoDB)
+            const parentProject = projects.find(p => p.tasks.some(t => t._id === task._id || t.id === task.id));
+            if (parentProject && parentProject._id) {
+                fetch('http://127.0.0.1:5000/api/projects/' + parentProject._id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(parentProject)
+                });
+            }
                 renderTaskList();
                 renderProjectList();
                 renderDashboard();
@@ -1321,17 +1352,33 @@
 
         function renderProjectList() {
             const projectList = document.getElementById('project-list');
+            if (!projectList) return; // Guard clause if element doesn't exist
+            
+            console.log('Rendering projects:', projects); // Debug log
             projectList.innerHTML = '';
             projectDropdowns = []; // Reset global array
+            
+            if (!Array.isArray(projects) || projects.length === 0) {
+                projectList.innerHTML = '<div class="text-gray-500 dark:text-gray-400 p-4">No projects yet. Create your first project!</div>';
+                return;
+            }
+            
             projects.forEach(project => {
+                if (!project) return; // Skip null/undefined projects
+                console.log('Rendering project:', project); // Debug log
+                
                 const projectDiv = document.createElement('div');
                 projectDiv.className = 'mb-4';
                 const headerDiv = document.createElement('div');
                 headerDiv.className = 'flex items-center justify-between mb-1';
                 const btn = document.createElement('button');
-                btn.textContent = project.name;
-                btn.className = `flex-grow text-left p-2 rounded mr-2 ${selectedProject && selectedProject.id === project.id ? "bg-blue-500 text-white" : "bg-gray-100 text-black dark:bg-gray-700 dark:text-gray-200"}`;
-                btn.addEventListener('click', () => selectProject(project.id));
+                btn.textContent = project.name || 'Untitled Project';
+                const isSelected = selectedProject && (selectedProject._id === project._id);
+                btn.className = `flex-grow text-left p-2 rounded mr-2 ${isSelected ? "bg-blue-500 text-white" : "bg-gray-100 text-black dark:bg-gray-700 dark:text-gray-200"}`;
+                btn.addEventListener('click', () => {
+                    console.log('Selecting project:', project._id);
+                    selectProject(project._id);
+                });
                 const statsDiv = document.createElement('div');
                 statsDiv.className = 'mt-1 px-2';
                 const progressContainer = document.createElement('div');
@@ -1374,7 +1421,7 @@
                 editBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     dropdownDiv.classList.add('hidden');
-                    editProject(project.id);
+                    editProject(project._id);
                 });
                 const deleteBtn = document.createElement('button');
                 deleteBtn.innerHTML = 'Delete';
@@ -1382,7 +1429,7 @@
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     dropdownDiv.classList.add('hidden');
-                    deleteProject(project.id);
+                    deleteProject(project._id);
                 });
                 dropdownDiv.appendChild(editBtn);
                 dropdownDiv.appendChild(deleteBtn);
@@ -1398,7 +1445,7 @@
         }
 
         function editProject(projectId) {
-            const project = projects.find(p => p.id === projectId);
+            const project = projects.find(p => p._id === projectId);
             
             // Create modal content
             const modalContent = `
@@ -1471,12 +1518,12 @@
 
         function deleteProject(projectId) {
             if (confirm('Are you sure you want to delete this project and all its tasks?')) {
-                const index = projects.findIndex(p => p.id === projectId);
+                const index = projects.findIndex(p => p._id === projectId);
                 if (index !== -1) {
                     projects.splice(index, 1);
                     saveData();
                     renderProjectList();
-                    if (selectedProject && selectedProject.id === projectId) {
+                    if (selectedProject && selectedProject._id === projectId) {
                         if (projects.length > 0) {
                             selectedProject = projects[0];
                             document.getElementById('project-title').textContent = selectedProject.name;
@@ -1493,7 +1540,8 @@
         }
 
         function selectProject(projectId) {
-            selectedProject = projects.find(p => p.id === projectId);
+            selectedProject = projects.find(p => p._id === projectId || p.id === projectId);
+            if (!selectedProject) return;
             document.getElementById('project-title').textContent = selectedProject.name;
             document.getElementById('dashboard-view').classList.add('hidden');
             document.getElementById('project-view').classList.remove('hidden');
